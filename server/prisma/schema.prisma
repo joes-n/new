@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite doesn't support Enums, so we just use String in the schema.
+// We can enforce types in application code.
+
+model User {
+  id         String     @id
+  nickname   String
+  assignment String     // Assignment enum: CONTROL, TREATMENT
+  createdAt  DateTime   @default(now())
+  lastSeenAt DateTime?
+  sessions   Session[]
+  messages   Message[]
+
+  @@index([createdAt])
+  @@index([lastSeenAt])
+}
+
+model Session {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  durationSec Int?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, startedAt])
+  @@index([startedAt])
+}
+
+model Message {
+  id               String     @id
+  userId           String
+  nicknameSnapshot String
+  text             String
+  createdAt        DateTime   @default(now())
+
+  // mood fields
+  mood        String    @default("NEUTRAL") // Mood enum
+  intensity   Float     @default(0)
+  seed        String?
+  moodUpdatedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+  job  InferenceJob?
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model AnalyticsEvent {
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now())
+  userId    String?
+  eventName String
+  metadata  String?  // SQLite doesn't support Json, store as stringified JSON
+
+  @@index([timestamp])
+  @@index([eventName, timestamp])
+}
+
+model InferenceJob {
+  id        Int      @id @default(autoincrement())
+  messageId String   @unique
+  status    String   @default("PENDING") // JobStatus enum: PENDING, PROCESSING, DONE, FAILED
+  attempts  Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@index([status, createdAt])
+}

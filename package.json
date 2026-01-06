@@ -1,0 +1,22 @@
+{
+  "name": "vn-chat-app",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npx concurrently \"npm run dev:client\" \"npm run dev:server\" \"npm run dev:python\"",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:python": "cd python && venv/bin/uvicorn app.main:app --reload --port 8000",
+    "build": "npm run build --workspaces",
+    "install:all": "npm install && cd python && pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}
