@@ -9,7 +9,45 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Try loading from multiple potential locations
+const envPaths = [
+    path.resolve(__dirname, '../.env'), // server/.env (if running from dist)
+    path.resolve(process.cwd(), '.env'), // current working directory
+    path.resolve(__dirname, '../../.env') // root .env ??
+];
+
+let loaded = false;
+for (const p of envPaths) {
+    const result = dotenv.config({ path: p });
+    if (result.error) {
+        // console.log(`Failed to load .env from ${p}`);
+    } else {
+        console.log(`Loaded .env from ${p}`);
+        loaded = true;
+        break;
+        // If we want to cascade/override, we might not break, but usually first match is enough.
+        // But dotenv doesn't override existing keys by default so order matters? 
+        // Actually dotenv.config() skips if key exists.
+    }
+}
+if (!loaded) {
+    // Fallback to default
+    dotenv.config();
+}
+
+console.log("Debug Info:");
+console.log("  CWD:", process.cwd());
+console.log("  __dirname:", __dirname);
+console.log("  DATABASE_URL:", process.env.DATABASE_URL ? "Defined" : "Undefined");
+
+if (!process.env.DATABASE_URL) {
+    console.error("CRITICAL: DATABASE_URL is missing. Prisma will fail.");
+}
+
+/* 
+ * Explicitly pass the connection URL to Prisma if it's in env but Prisma isn't seeing it 
+ * (though PrismaClient usually reads process.env itself).
+ */
 
 if (!process.env.DATABASE_URL) {
     console.error("WARNING: DATABASE_URL is not defined. Ensure .env file exists in the server root.");
