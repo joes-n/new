@@ -160,7 +160,7 @@ io.on('connection', (socket) => {
                 orderBy: { createdAt: 'desc' },
                 include: { user: true }
             });
-            const lastMessages = lastMessagesRaw.reverse().map(m => ({
+            const lastMessages = lastMessagesRaw.reverse().map((m: any) => ({
                 id: m.id,
                 userId: m.userId,
                 nicknameSnapshot: m.nicknameSnapshot,
