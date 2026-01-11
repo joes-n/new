@@ -1,11 +1,11 @@
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { socket } from './lib/socket';
 import { NicknameModal } from './components/NicknameModal';
 import { VNChatView } from './components/VNChatView';
-import { getAssignment } from './lib/ab-testing';
-import type { OnlineUser, MessageDTO, SessionAckPayload } from './lib/types';
+import { getAssignment, setAssignmentOverride } from './lib/ab-testing';
+import type { OnlineUser, MessageDTO, SessionAckPayload, Assignment } from './lib/types';
 
 function App() {
   const [connected, setConnected] = useState(false);
@@ -17,8 +17,8 @@ function App() {
 
   const userIdRef = useRef(localStorage.getItem('vn_userid') || uuidv4());
 
-  // Determine A/B Assignment
-  const assignment = useMemo(() => getAssignment(userIdRef.current), []);
+  // State for assignment to allow toggling
+  const [assignment, setAssignment] = useState<Assignment>(() => getAssignment(userIdRef.current));
 
   useEffect(() => {
     localStorage.setItem('vn_userid', userIdRef.current);
@@ -90,15 +90,6 @@ function App() {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    // Optimistically update or just wait for server? 
-    // Spec says wait for message:new for simplicity usually, but we can verify end-to-end.
-    // We will just emit for now.
-
-    // NOTE: In Phase 1 server code I didn't verify message handling fully yet??
-    // Wait, the spec says "message:send" payload calls. 
-    // And server index.ts mock implementation needs to handle it.
-    // I need to update server/src/index.ts to actually echo messages for Acceptance criteria!
-
     socket.emit('message:send', {
       userId: userIdRef.current,
       text: inputValue.trim()
@@ -113,20 +104,39 @@ function App() {
     });
   }
 
+  const toggleAssignment = useCallback(() => {
+    const newAssignment = assignment === 'CONTROL' ? 'TREATMENT' : 'CONTROL';
+    setAssignmentOverride(newAssignment);
+    setAssignment(newAssignment);
+  }, [assignment]);
+
   if (!joined) {
     return <NicknameModal onSubmit={handleJoin} />;
   }
 
+  // Common Toggle Button
+  const ToggleButton = () => (
+    <button
+      onClick={toggleAssignment}
+      className="fixed bottom-4 right-4 z-[100] px-3 py-1 bg-gray-800 text-white text-xs opacity-50 hover:opacity-100 rounded shadow-lg transition-opacity"
+    >
+      Dev: Switch to {assignment === 'CONTROL' ? 'Treatment' : 'Control'}
+    </button>
+  );
+
   // Render VN View for TREATMENT group
   if (assignment === 'TREATMENT') {
     return (
-      <VNChatView
-        userId={userIdRef.current}
-        connected={connected}
-        onlineUsers={onlineUsers}
-        messages={messages}
-        onSendMessage={sendVNMessage}
-      />
+      <>
+        <VNChatView
+          userId={userIdRef.current}
+          connected={connected}
+          onlineUsers={onlineUsers}
+          messages={messages}
+          onSendMessage={sendVNMessage}
+        />
+        <ToggleButton />
+      </>
     );
   }
 
@@ -187,6 +197,7 @@ function App() {
           </button>
         </form>
       </div>
+      <ToggleButton />
     </div>
   );
 }

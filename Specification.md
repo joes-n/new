@@ -13,7 +13,7 @@ This document is written to be **LLM-friendly**: it defines exact ports, environ
 - Deterministic A/B assignment per user.
 - Store messages and basic analytics in a DB (SQLite via Prisma).
 - Async mood classification pipeline (Node server + Python sidecar).
-- Deployable on **Oracle Always Free ARM (Ampere A1)**; stable under low concurrency.
+- Deployable on **Oracle Always Free ARM (Ampere A1)**; stable under low concurrency (max ~4 concurrent users).
 
 ## 3) Non-goals (explicitly out of scope)
 
@@ -123,12 +123,13 @@ Required:
 
 Optional (defaults must be implemented):
 - `MESSAGE_HISTORY_LIMIT=200`
-- `RATE_LIMIT_MAX=10` (messages)
+- `RATE_LIMIT_MAX=10` (messages, **per-user**)
 - `RATE_LIMIT_WINDOW_MS=10000` (10s)
 - `INFER_POLL_MS=500`
 - `INFER_TIMEOUT_MS=1500`
 - `ADMIN_TOKEN=""` (empty = no protection; if set, require header `x-admin-token`)
 - `ENABLE_MODEL=1` (python; 0 uses stub mood, 1 uses DistilRoBERTa)
+- `SQLITE_WAL_MODE=1` (recommended; enables WAL mode for better concurrent reads)
 
 Docker (compose) must override:
 - `PY_INFER_URL="http://python:8000"`
@@ -136,6 +137,11 @@ Docker (compose) must override:
 ---
 
 ## 8) Data Model (Prisma + SQLite)
+
+**SQLite Configuration**: For concurrent access, enable WAL mode on startup:
+```ts
+await prisma.$executeRaw`PRAGMA journal_mode=WAL`;
+```
 
 ### 8.1 Prisma schema (authoritative)
 
@@ -158,11 +164,16 @@ enum Assignment {
 enum Mood {
   ADMIRATION
   AMUSEMENT
+  ANGER
+  ANNOYANCE
   APPROVAL
   CARING
+  CONFUSION
+  CURIOSITY
   DESIRE
   DISAPPOINTMENT
   DISAPPROVAL
+  DISGUST
   EMBARRASSMENT
   EXCITEMENT
   FEAR
@@ -278,11 +289,34 @@ export type OnlineUser = {
 };
 
 export type Mood =
-  | "ADMIRATION" | "AMUSEMENT" | "APPROVAL" | "CARING" | "DESIRE"
-  | "DISAPPOINTMENT" | "DISAPPROVAL" | "EMBARRASSMENT" | "EXCITEMENT"
-  | "FEAR" | "GRATITUDE" | "GRIEF" | "JOY" | "LOVE" | "NERVOUSNESS"
-  | "OPTIMISM" | "PRIDE" | "REALIZATION" | "RELIEF" | "REMORSE"
-  | "SADNESS" | "SURPRISE" | "NEUTRAL";
+  | "ADMIRATION"
+  | "AMUSEMENT"
+  | "ANGER"
+  | "ANNOYANCE"
+  | "APPROVAL"
+  | "CARING"
+  | "CONFUSION"
+  | "CURIOSITY"
+  | "DESIRE"
+  | "DISAPPOINTMENT"
+  | "DISAPPROVAL"
+  | "DISGUST"
+  | "EMBARRASSMENT"
+  | "EXCITEMENT"
+  | "FEAR"
+  | "GRATITUDE"
+  | "GRIEF"
+  | "JOY"
+  | "LOVE"
+  | "NERVOUSNESS"
+  | "OPTIMISM"
+  | "PRIDE"
+  | "REALIZATION"
+  | "RELIEF"
+  | "REMORSE"
+  | "SADNESS"
+  | "SURPRISE"
+  | "NEUTRAL";
 
 export type MessageDTO = {
   id: string;
@@ -372,7 +406,7 @@ Implementation requirement:
 ### 12.1 On `session:start`
 
 Server must:
-1. Validate nickname (trim, 1..20 chars).
+1. Validate nickname (trim, 1..20 chars). **If invalid, emit `error:invalid_payload` with message and disconnect.**
 2. Upsert user by `userId`:
    - if new: compute assignment, create User with `lastSeenAt = now()`
    - if existing: update nickname and `lastSeenAt = now()`
@@ -395,17 +429,18 @@ Server must:
 ### 12.3 On `message:send`
 
 Server must:
-1. Validate payload and apply rate limit.
-2. If accepted (not rate-limited), update `lastSeenAt = now()` for the user.
-3. Create `Message` with:
+1. Validate payload and apply per-user rate limit.
+2. Create `Message` with:
    - `id = uuid`
    - `nicknameSnapshot = current nickname`
    - `mood = "NEUTRAL"`
    - `intensity = 0`
-   - `seed = stableSeed(messageId)`
-4. Emit `message:new` immediately (with neutral mood).
-5. Insert `AnalyticsEvent` `message_sent`.
-6. Create `InferenceJob(PENDING)` for this message.
+   - `seed = messageId.slice(0, 8)` (first 8 chars of UUID)
+3. Emit `message:new` immediately (with neutral mood).
+4. Insert `AnalyticsEvent` `message_sent`.
+5. Create `InferenceJob(PENDING)` for this message.
+
+**Note**: `lastSeenAt` updates are handled only on `session:start` and `disconnect` to reduce DB writes.
 
 ### 12.4 Inference worker (server)
 
@@ -427,7 +462,8 @@ A single background loop:
 
 Server must:
 1. Validate payload.
-2. Insert `AnalyticsEvent` with `eventName="scene_changed"` and `metadata = payload minus userId` (or include it, but be consistent).
+2. **Throttle**: Ignore if same user sent `scene:changed` within last 3 seconds (prevents spam).
+3. Insert `AnalyticsEvent` with `eventName="scene_changed"` and `metadata = payload minus userId`.
 
 ---
 
@@ -469,7 +505,7 @@ Input: `MessageDTO.mood`, `intensity`, and `seed`.
 - Expression mapping (minimum set):
   - JOY/LOVE/EXCITEMENT → "happy"
   - SADNESS/GRIEF/REMORSE → "sad"
-- DISAPPROVAL/DISAPPOINTMENT → "angry"
+  - DISAPPROVAL/DISAPPOINTMENT → "angry"
   - SURPRISE/REALIZATION → "surprised"
   - FEAR/NERVOUSNESS → "worried"
   - default → "neutral"
@@ -527,8 +563,8 @@ Endpoints:
 
 Retention definition (must be implemented as written):
 - Cohort by `User.createdAt` date (UTC date string).
-- A user is **D1 retained** if they have `lastSeenAt` on cohortDate + 1 day.
-- A user is **D7 retained** if `lastSeenAt` on cohortDate + 7 days.
+- A user is **D1 retained** if their `lastSeenAt` >= cohortDate + 1 day.
+- A user is **D7 retained** if their `lastSeenAt` >= cohortDate + 7 days.
 
 - `GET /admin/users`
   - Returns array:
@@ -563,9 +599,15 @@ Root scripts must include:
 Compose services:
 - `python` (FastAPI on 8000)
 - `server` (Node on 3000, uses `PY_INFER_URL=http://python:8000`)
-- Optional:
-  - Serve built client from server, OR add `nginx` to serve static client and reverse proxy socket.
+- **Default**: Serve built client as static files from Express server (simplest for MVP).
 
 Health checks:
 - server: `GET /health`
 - python: `GET /health`
+
+### 17.3 Graceful Shutdown
+
+Both server and python must handle `SIGTERM`:
+- Close new connections gracefully.
+- Allow in-flight requests/sockets 5 seconds to complete.
+- Inference worker: finish current job if processing, skip queue.

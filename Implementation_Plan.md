@@ -22,7 +22,7 @@ This plan is written to minimize “LLM drift” and token-limit failures. Each 
 
 ---
 
-## Phase 1 — barebones scaffold (LLM Output #1)
+## Phase 1 — barebones scaffold (LLM Output #1) ✅ Complete
 
 ### Scope
 Create a compiling monorepo scaffold that boots all three services and proves the end-to-end handshake works.
@@ -67,7 +67,7 @@ Create a compiling monorepo scaffold that boots all three services and proves th
 
 ---
 
-## Phase 2 — realtime correctness + persistence (LLM Output #2)
+## Phase 2 — realtime correctness + persistence (LLM Output #2) ✅ Complete
 
 ### Scope
 Make presence and message persistence correct for multiple tabs/users.
@@ -85,7 +85,7 @@ Make presence and message persistence correct for multiple tabs/users.
 
 ---
 
-## Phase 3 — VN UI (LLM Output #3)
+## Phase 3 — VN UI (LLM Output #3) ✅ Complete
 
 ### Scope
 Implement the VN renderer used only for TREATMENT users.
@@ -111,11 +111,12 @@ Add DB-backed inference job queue + background worker + sidecar call.
 
 ### Deliverables
 - Create `InferenceJob(PENDING)` per message
-- Worker loop:
+- Worker loop (single-threaded, sufficient for ≤4 users):
   - claims jobs
   - calls `/infer`
   - updates message mood, emits `message:mood_updated`
   - retries up to 3 times then marks FAILED
+- Seed generation: `seed = messageId.slice(0, 8)`
 - Python stays stub by default (`ENABLE_MODEL=0`)
 
 ### Acceptance
@@ -144,13 +145,16 @@ Add server endpoints and basic client admin page.
 
 ### Deliverables
 - Server unit tests:
-  - rate limiter
+  - per-user rate limiter
   - deterministic A/B hash
 - inference job worker behavior (success/failure transitions)
 - Minimal client test for VN component rendering (optional but preferred)
 - `docker-compose.yml` for linux/arm64:
-  - python + server (+ optional static client serving)
+  - python + server + built client served by Express (default for MVP)
+  - Enable SQLite WAL mode on startup
+  - Graceful shutdown (SIGTERM handling, 5s drain)
 
 ### Acceptance
 - `npm test` passes
 - `docker compose up --build` runs health endpoints and socket connection works
+- Graceful shutdown completes within 5 seconds

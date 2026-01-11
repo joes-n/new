@@ -7,11 +7,34 @@ export type OnlineUser = {
 };
 
 export type Mood =
-    | "ADMIRATION" | "AMUSEMENT" | "APPROVAL" | "CARING" | "DESIRE"
-    | "DISAPPOINTMENT" | "DISAPPROVAL" | "EMBARRASSMENT" | "EXCITEMENT"
-    | "FEAR" | "GRATITUDE" | "GRIEF" | "JOY" | "LOVE" | "NERVOUSNESS"
-    | "OPTIMISM" | "PRIDE" | "REALIZATION" | "RELIEF" | "REMORSE"
-    | "SADNESS" | "SURPRISE" | "NEUTRAL";
+    | "ADMIRATION"
+    | "AMUSEMENT"
+    | "ANGER"
+    | "ANNOYANCE"
+    | "APPROVAL"
+    | "CARING"
+    | "CONFUSION"
+    | "CURIOSITY"
+    | "DESIRE"
+    | "DISAPPOINTMENT"
+    | "DISAPPROVAL"
+    | "DISGUST"
+    | "EMBARRASSMENT"
+    | "EXCITEMENT"
+    | "FEAR"
+    | "GRATITUDE"
+    | "GRIEF"
+    | "JOY"
+    | "LOVE"
+    | "NERVOUSNESS"
+    | "OPTIMISM"
+    | "PRIDE"
+    | "REALIZATION"
+    | "RELIEF"
+    | "REMORSE"
+    | "SADNESS"
+    | "SURPRISE"
+    | "NEUTRAL";
 
 export type MessageDTO = {
     id: string;

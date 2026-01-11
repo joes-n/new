@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { MessageDTO, OnlineUser } from '../lib/types';
+import { getAvatarUrl } from '../lib/avatar-mapping';
 
 interface VNChatViewProps {
     userId: string;
@@ -50,9 +51,9 @@ export const VNChatView: React.FC<VNChatViewProps> = ({
 
             {/* Layer 2: Avatar */}
             {/* Centered character sprite. */}
-            <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center pointer-events-none">
+            <div className="absolute inset-x-0 bottom-62 z-10 flex justify-center pointer-events-none">
                 <img
-                    src={`/assets/vn/avatars/${currentMood}.png`}
+                    src={getAvatarUrl(currentMood)}
                     onError={(e) => {
                         // Fallback if image missing: render a colored placeholder
                         // Note: Since we can't easily replace the img tag with a div on error in a clean way without state, 
