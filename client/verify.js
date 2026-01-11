@@ -2,7 +2,7 @@
 import { io } from "socket.io-client";
 import { v4 as uuidv4 } from "uuid";
 
-const SERVER_URL = "http://localhost:3000";
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
 
 async function run() {
     console.log("Starting verification...");
