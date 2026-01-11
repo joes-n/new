@@ -12,7 +12,11 @@ const client_1 = require("@prisma/client");
 const uuid_1 = require("uuid");
 const zod_1 = require("zod");
 const crypto_1 = __importDefault(require("crypto"));
-dotenv_1.default.config();
+const path_1 = __importDefault(require("path"));
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../.env') });
+if (!process.env.DATABASE_URL) {
+    console.error("WARNING: DATABASE_URL is not defined. Ensure .env file exists in the server root.");
+}
 const SessionStartSchema = zod_1.z.object({
     userId: zod_1.z.string().uuid(),
     nickname: zod_1.z.string().min(1).max(20).trim()

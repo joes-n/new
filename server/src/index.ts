@@ -7,8 +7,13 @@ import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import crypto from 'crypto';
+import path from 'path';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+if (!process.env.DATABASE_URL) {
+    console.error("WARNING: DATABASE_URL is not defined. Ensure .env file exists in the server root.");
+}
 
 const SessionStartSchema = z.object({
     userId: z.string().uuid(),
